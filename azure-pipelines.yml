@@ -50,3 +50,12 @@ stages:
         
         echo "Updated inventory file:"
         cat "$inventoryFile"
+- stage: InstallTerraform
+  displayName: Install Terraform using Ansible
+  dependsOn: InstallEpelAndAnsible
+  jobs:
+  - job: InstallTerraform
+    steps:
+    - script: |
+        echo "Running Ansible playbook to install Terraform..."
+        ansible-playbook ./ansiblebooks/install_tf.yml    
