@@ -7,7 +7,7 @@
 # - main
  
 pool:
-  vmImage: ubuntu-latest
+  #vmImage: ubuntu-latest
   name: "pool1"
  
 stages:
