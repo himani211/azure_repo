@@ -18,3 +18,35 @@ stages:
     displayName: Clone Git Repository
     steps:
     - checkout: self
+
+- stage: InstallEpelAndAnsible
+  displayName: Install EPEL-Release and Ansible
+  dependsOn: SCMCheckout
+  jobs:
+  - job: Install
+    steps:
+    - script: |
+        echo "Installing EPEL-Release and Ansible..."
+        sudo dnf update -y
+        sudo dnf install epel-release
+        sudo dnf install ansible
+        ansible --version
+ 
+  - job: CaptureAndUpdate
+    steps:
+    - script: |
+        echo "Capturing IP address..."
+        ipAddress=$(ip a show eth0 | grep inet | grep -v inet6 | awk '{print $2}' | cut -d'/' -f1 | head -n 1)
+        echo "IP Address: $ipAddress"
+        
+        inventoryFile="/etc/ansible/hosts"
+        if ! grep -q "$ipAddress" "$inventoryFile"; then
+          echo "Adding IP address to inventory file..."
+          echo "[Client]" | sudo tee -a "$inventoryFile"
+          echo "$ipAddress" | sudo tee -a "$inventoryFile"
+        else
+          echo "IP address $ipAddress already exists in the inventory file. Skipping update."
+        fi
+        
+        echo "Updated inventory file:"
+        cat "$inventoryFile"
