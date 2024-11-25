@@ -7,7 +7,7 @@
 # - main
  
 pool:
-  vmImage: ubuntu-latest
+  #vmImage: ubuntu-latest
   name: "pool1"
  
 stages:
@@ -50,6 +50,7 @@ stages:
         
         echo "Updated inventory file:"
         cat "$inventoryFile"
+
 - stage: InstallTerraform
   displayName: Install Terraform using Ansible
   dependsOn: InstallEpelAndAnsible
@@ -58,4 +59,17 @@ stages:
     steps:
     - script: |
         echo "Running Ansible playbook to install Terraform..."
-        ansible-playbook ./ansiblebooks/install_tf.yml    
+        ansible-playbook ./ansiblebooks/install_tf.yaml
+ 
+- stage: TerraformOperations
+  displayName: Terraform Init, Plan, and Apply
+  dependsOn: InstallTerraform
+  jobs:
+  - job: TerraformOps
+    steps:
+    - script: |
+        echo "Initializing and applying Terraform configuration..."
+        cd terraform
+        terraform init -force-copy
+        terraform plan
+        terraform apply -auto-approve
