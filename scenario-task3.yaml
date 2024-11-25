@@ -69,7 +69,7 @@ stages:
     steps:
     - script: |
         echo "Initializing and applying Terraform configuration..."
-        cd terraform
+        cd Terraform
         terraform init -force-copy
         terraform plan
         terraform apply -auto-approve
