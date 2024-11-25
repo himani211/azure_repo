@@ -36,6 +36,7 @@ resource "azurerm_subnet" "subnet" {
 
 # Network Security Group
 resource "azurerm_network_security_group" "nsg01" {
+  depends_on = [azurerm_resource_group.rg2]
   name                = var.nsg_name
   location            = var.location
   resource_group_name = var.resource_group_name
