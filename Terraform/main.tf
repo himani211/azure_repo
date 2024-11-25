@@ -20,6 +20,7 @@ resource "azurerm_resource_group" "rg2" {
 
 # Virtual Network
 resource "azurerm_virtual_network" "Vnett01" {
+  depends_on = [azurerm_resource_group.rg2]
   name                = var.vnet_name
   address_space       = var.address_space
   location            = var.location
@@ -68,6 +69,7 @@ resource "azurerm_network_security_group" "nsg01" {
 
 # Public IP Address
 resource "azurerm_public_ip" "vm_public_ipaddr11" {
+  depends_on = [azurerm_resource_group.rg2]
   name                = "vm-public-ip-S3"
   location            = var.location
   resource_group_name = var.resource_group_name
