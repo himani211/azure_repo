@@ -1,8 +1,5 @@
 # Starter pipeline
 
-trigger:
-  main
-
 pool:
   #vmImage: ubuntu-latest
   name: pool1
