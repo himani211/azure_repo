@@ -111,4 +111,4 @@ stages:
     displayName: Test_Docker
     steps:
     - script: | 
-        curl localhost:8000
+        curl localhost:8081
