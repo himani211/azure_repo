@@ -6,9 +6,9 @@
 trigger:
   none
  
-pool:
+#pool:
   #vmImage: ubuntu-latest
-  name: "pool1"
+  #name: "pool1"
  
 stages:
 # - stage: SCMCheckout
