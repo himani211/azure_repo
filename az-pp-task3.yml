@@ -94,9 +94,11 @@ stages:
   jobs:
   - job: MavenBuildJob
     steps:
+
+
     - task: Maven@4
       inputs:
-        azureSubscription: 'full access portal'
+        azureSubscription: 'fullaccessportal'
         mavenPomFile: 'pom.xml'
         publishJUnitResults: false
         javaHomeOption: 'JDKVersion'
