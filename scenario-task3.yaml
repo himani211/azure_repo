@@ -6,116 +6,94 @@
 trigger:
   none
  
-#pool:
-  #vmImage: ubuntu-latest
-  #name: "pool1"
+pool:
+  vmImage: ubuntu-latest
+  name: "pool1"
  
 stages:
-# - stage: SCMCheckout
-#   displayName: Checkout Code
-#   jobs:
-#   - job: git_clone 
-#     displayName: Clone Git Repository
-#     steps:
-#     - checkout: self
+- stage: SCMCheckout
+  displayName: Checkout Code
+  jobs:
+  - job: git_clone 
+    displayName: Clone Git Repository
+    steps:
+    - checkout: self
 
-# - stage: InstallEpelAndAnsible
-#   displayName: Install EPEL-Release and Ansible
-#   dependsOn: SCMCheckout
-#   jobs:
-#   - job: Install
-#     steps:
-#     - script: |
-#         echo "Installing EPEL-Release and Ansible..."
-#         sudo dnf update -y
-#         sudo dnf install epel-release
-#         sudo dnf install ansible
-#         ansible --version
+- stage: InstallEpelAndAnsible
+  displayName: Install EPEL-Release and Ansible
+  dependsOn: SCMCheckout
+  jobs:
+  - job: Install
+    steps:
+    - script: |
+        echo "Installing EPEL-Release and Ansible..."
+        sudo dnf update -y
+        sudo dnf install epel-release
+        sudo dnf install ansible
+        ansible --version
  
-#   - job: CaptureAndUpdate
-#     steps:
-#     - script: |
-#         echo "Capturing IP address..."
-#         ipAddress=$(ip a show eth0 | grep inet | grep -v inet6 | awk '{print $2}' | cut -d'/' -f1 | head -n 1)
-#         echo "IP Address: $ipAddress"
+  - job: CaptureAndUpdate
+    steps:
+    - script: |
+        echo "Capturing IP address..."
+        ipAddress=$(ip a show eth0 | grep inet | grep -v inet6 | awk '{print $2}' | cut -d'/' -f1 | head -n 1)
+        echo "IP Address: $ipAddress"
         
-#         inventoryFile="/etc/ansible/hosts"
-#         if ! grep -q "$ipAddress" "$inventoryFile"; then
-#           echo "Adding IP address to inventory file..."
-#           echo "[Client]" | sudo tee -a "$inventoryFile"
-#           echo "$ipAddress" | sudo tee -a "$inventoryFile"
-#         else
-#           echo "IP address $ipAddress already exists in the inventory file. Skipping update."
-#         fi
+        inventoryFile="/etc/ansible/hosts"
+        if ! grep -q "$ipAddress" "$inventoryFile"; then
+          echo "Adding IP address to inventory file..."
+          echo "[Client]" | sudo tee -a "$inventoryFile"
+          echo "$ipAddress" | sudo tee -a "$inventoryFile"
+        else
+          echo "IP address $ipAddress already exists in the inventory file. Skipping update."
+        fi
         
-#         echo "Updated inventory file:"
-#         cat "$inventoryFile"
+        echo "Updated inventory file:"
+        cat "$inventoryFile"
 
-# - stage: InstallTerraform
-#   displayName: Install Terraform using Ansible
-#   dependsOn: InstallEpelAndAnsible
-#   jobs:
-#   - job: InstallTerraform
-#     steps:
-#     - script: |
-#         echo "Running Ansible playbook to install Terraform..."
-#         ansible-playbook ./ansiblebooks/install_tf.yml
+- stage: InstallTerraform
+  displayName: Install Terraform using Ansible
+  dependsOn: InstallEpelAndAnsible
+  jobs:
+  - job: InstallTerraform
+    steps:
+    - script: |
+        echo "Running Ansible playbook to install Terraform..."
+        ansible-playbook ./ansiblebooks/install_tf.yml
  
-# - stage: TerraformOperations
-#   displayName: Terraform Init, Plan, and Apply
-#   dependsOn: InstallTerraform
-#   jobs:
-#   - job: TerraformOps
-#     steps:
-#     - script: |
-#         echo "Initializing and applying Terraform configuration..."
-#         cd Terraform
-#         terraform init -force-copy
-#         terraform plan
-#         terraform apply -auto-approve
+- stage: TerraformOperations
+  displayName: Terraform Init, Plan, and Apply
+  dependsOn: InstallTerraform
+  jobs:
+  - job: TerraformOps
+    steps:
+    - script: |
+        echo "Initializing and applying Terraform configuration..."
+        cd Terraform
+        terraform init -force-copy
+        terraform plan
+        terraform apply -auto-approve
 
-# - stage: SCMCheckout2
-#   displayName: Checkout Code
-#   dependsOn: TerraformOperations
-#   pool:
-#     #vmImage: ubuntu-latest
-#     name: "pool2" 
-#   jobs:
-#   - job: git_clone 
-#     displayName: Clone Git Repository
-#     steps:
-#     - checkout: self
- 
-# - stage: MavenBuild_docker_compose
-#   displayName: Maven Build
-#   dependsOn: SCMCheckout2
-#   pool:
-#     #vmImage: ubuntu-latest
-#     name: "pool2" 
-#   jobs:
-#   - job: MavenBuildJob
-#     steps:
-#     - script: |
-#         echo "Running Maven build..."
-#         mvn clean install
-#         sudo docker compose up -d
-#         sudo docker ps 
- 
-# - stage: Test_Docker  
-#   dependsOn: MavenBuild_docker_compose
-#   pool:
-#     #vmImage: ubuntu-latest
-#     name: "pool2" 
-#   jobs:
-#   - job: Test_Docker 
-#     displayName: Test_Docker
-#     steps:
-#     - script: | 
-#         curl localhost:8081
+- stage: ApprovalStage
+  displayName: "Approval Stage"
+  dependsOn: TerraformOperations
+  pool:
+    name: pool2
+  jobs:
+  - deployment: ManualApproval
+    displayName: "Approval for Maven Build"
+    environment: PostTerraformApproval 
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - script: |
+              echo "Approval granted. Proceeding to Maven Build stage."
+            displayName: "Approval Confirmed"
 
 - stage: SCMCheckout2
   displayName: Checkout Code
-  #dependsOn: TerraformOperations
+  dependsOn: TerraformOperations
   pool:
     name: "pool2"
   jobs:
@@ -149,6 +127,23 @@ stages:
         PathtoPublish: '$(System.DefaultWorkingDirectory)/target'
         ArtifactName: 'target'
         publishLocation: 'Container'
+
+- stage: ApprovalStage2
+  displayName: "Approval Stage 2"
+  dependsOn: MavenBuild
+  pool:
+    name: pool2
+  jobs:
+  - deployment: ManualApproval
+    displayName: "Approval for Docker Compose Up"
+    environment: DockerComposeApproval 
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - script: |
+              echo "Approval granted. Proceeding to Docker Compose Up stage."
+            displayName: "Approval Confirmed"
  
 - stage: DockerCompose
   displayName: docker compose
@@ -183,3 +178,47 @@ stages:
     steps:
     - script: | 
         curl localhost:8081
+
+- stage: ApprovalStage3
+  displayName: "Approval Stage 3"
+  dependsOn: Test_Docker
+  pool:
+    name: pool2
+  jobs:
+  - deployment: ManualApproval
+    displayName: "Approval for Destroy"
+    environment: TerraformDestroyApproval 
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - script: |
+              echo "Approval granted. Proceeding to Terraform Destroy stage."
+            displayName: "Approval Confirmed"
+  
+- stage: TerraformDestroy
+  displayName: "Terraform Destroy"
+  dependsOn: ApprovalStage3
+  pool:
+    name: pool1
+  jobs:
+  - job: Terraform_Destroy
+    displayName: "Destroying the Terraform"
+    steps:
+    
+    - task: TerraformTaskV4@4
+      inputs:
+        provider: 'azurerm'
+        command: 'init'
+        workingDirectory: '$(System.DefaultWorkingDirectory)/Terraform'
+        backendServiceArm: 'fullaccessportal'
+        backendAzureRmResourceGroupName: 'RGnew'
+        backendAzureRmStorageAccountName: 'himani789'
+        backendAzureRmContainerName: 'container1'
+        backendAzureRmKey: 'terraform.tfstate'
+    - task: TerraformTaskV4@4
+      inputs:
+        provider: 'azurerm'
+        command: 'destroy'
+        workingDirectory: '$(System.DefaultWorkingDirectory)/Terraform/'
+        environmentServiceNameAzureRM: 'fullaccessportal'
