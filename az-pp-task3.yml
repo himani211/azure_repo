@@ -94,8 +94,6 @@ stages:
   jobs:
   - job: MavenBuildJob
     steps:
-
-
     - task: Maven@4
       inputs:
         azureSubscription: 'fullaccessportal'
@@ -109,8 +107,8 @@ stages:
         
     - task: PublishBuildArtifacts@1
       inputs:
-        PathtoPublish: '$(System.DefaultWorkingDirectory)/target'
-        ArtifactName: 'maven-artifact'
+        PathtoPublish: '$(System.DefaultWorkingDirectory)/target/'
+        ArtifactName: 'target'
         publishLocation: 'Container'
  
 - stage: DockerCompose
@@ -123,21 +121,19 @@ stages:
     steps:
     - task: DownloadBuildArtifacts@0
       inputs:
-        buildType: 'current' # Downloads artifacts from the current build.
-        downloadType: 'single' # Downloads a single artifact.
-        artifactName: 'maven-artifact' # Name of the artifact to download.
-        downloadPath: '$(System.DefaultWorkingDirectory)/target' # Path where the artifact will be downloaded.
-    - script: |
-        echo "Starting Docker Compose..."
-        docker compose -f $(System.DefaultWorkingDirectory)/docker-compose.yaml up -d
-        # Capture the exit code of the Docker Compose command
-        if [ $? -ne 0 ]; then
-            echo "Docker Compose execution failed. Exiting with error."
-            exit 1
-        else
-            echo "Docker Compose executed successfully."
-            docker ps
-        fi
+        buildType: 'current'
+        downloadType: 'single' 
+        artifactName: 'target'
+        downloadPath: '$(System.DefaultWorkingDirectory)/' 
+      
+    - task: DockerCompose@1
+      inputs:
+        containerregistrytype: 'Azure Container Registry'
+        azureSubscription: 'fullaccessportal'
+        dockerComposeFile: '$(System.DefaultWorkingDirectory)/docker-compose.yaml'
+        action: 'Run a Docker Compose command'
+        dockerComposeCommand: 'up -d'
+ 
 - stage: Test_Docker  
   dependsOn: DockerCompose
   pool:
@@ -148,4 +144,3 @@ stages:
     steps:
     - script: | 
         curl localhost:8081
-
