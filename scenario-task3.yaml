@@ -11,100 +11,171 @@ pool:
   name: "pool1"
  
 stages:
-- stage: SCMCheckout
-  displayName: Checkout Code
-  jobs:
-  - job: git_clone 
-    displayName: Clone Git Repository
-    steps:
-    - checkout: self
+# - stage: SCMCheckout
+#   displayName: Checkout Code
+#   jobs:
+#   - job: git_clone 
+#     displayName: Clone Git Repository
+#     steps:
+#     - checkout: self
 
-- stage: InstallEpelAndAnsible
-  displayName: Install EPEL-Release and Ansible
-  dependsOn: SCMCheckout
-  jobs:
-  - job: Install
-    steps:
-    - script: |
-        echo "Installing EPEL-Release and Ansible..."
-        sudo dnf update -y
-        sudo dnf install epel-release
-        sudo dnf install ansible
-        ansible --version
+# - stage: InstallEpelAndAnsible
+#   displayName: Install EPEL-Release and Ansible
+#   dependsOn: SCMCheckout
+#   jobs:
+#   - job: Install
+#     steps:
+#     - script: |
+#         echo "Installing EPEL-Release and Ansible..."
+#         sudo dnf update -y
+#         sudo dnf install epel-release
+#         sudo dnf install ansible
+#         ansible --version
  
-  - job: CaptureAndUpdate
-    steps:
-    - script: |
-        echo "Capturing IP address..."
-        ipAddress=$(ip a show eth0 | grep inet | grep -v inet6 | awk '{print $2}' | cut -d'/' -f1 | head -n 1)
-        echo "IP Address: $ipAddress"
+#   - job: CaptureAndUpdate
+#     steps:
+#     - script: |
+#         echo "Capturing IP address..."
+#         ipAddress=$(ip a show eth0 | grep inet | grep -v inet6 | awk '{print $2}' | cut -d'/' -f1 | head -n 1)
+#         echo "IP Address: $ipAddress"
         
-        inventoryFile="/etc/ansible/hosts"
-        if ! grep -q "$ipAddress" "$inventoryFile"; then
-          echo "Adding IP address to inventory file..."
-          echo "[Client]" | sudo tee -a "$inventoryFile"
-          echo "$ipAddress" | sudo tee -a "$inventoryFile"
-        else
-          echo "IP address $ipAddress already exists in the inventory file. Skipping update."
-        fi
+#         inventoryFile="/etc/ansible/hosts"
+#         if ! grep -q "$ipAddress" "$inventoryFile"; then
+#           echo "Adding IP address to inventory file..."
+#           echo "[Client]" | sudo tee -a "$inventoryFile"
+#           echo "$ipAddress" | sudo tee -a "$inventoryFile"
+#         else
+#           echo "IP address $ipAddress already exists in the inventory file. Skipping update."
+#         fi
         
-        echo "Updated inventory file:"
-        cat "$inventoryFile"
+#         echo "Updated inventory file:"
+#         cat "$inventoryFile"
 
-- stage: InstallTerraform
-  displayName: Install Terraform using Ansible
-  dependsOn: InstallEpelAndAnsible
-  jobs:
-  - job: InstallTerraform
-    steps:
-    - script: |
-        echo "Running Ansible playbook to install Terraform..."
-        ansible-playbook ./ansiblebooks/install_tf.yml
+# - stage: InstallTerraform
+#   displayName: Install Terraform using Ansible
+#   dependsOn: InstallEpelAndAnsible
+#   jobs:
+#   - job: InstallTerraform
+#     steps:
+#     - script: |
+#         echo "Running Ansible playbook to install Terraform..."
+#         ansible-playbook ./ansiblebooks/install_tf.yml
  
-- stage: TerraformOperations
-  displayName: Terraform Init, Plan, and Apply
-  dependsOn: InstallTerraform
-  jobs:
-  - job: TerraformOps
-    steps:
-    - script: |
-        echo "Initializing and applying Terraform configuration..."
-        cd Terraform
-        terraform init -force-copy
-        terraform plan
-        terraform apply -auto-approve
+# - stage: TerraformOperations
+#   displayName: Terraform Init, Plan, and Apply
+#   dependsOn: InstallTerraform
+#   jobs:
+#   - job: TerraformOps
+#     steps:
+#     - script: |
+#         echo "Initializing and applying Terraform configuration..."
+#         cd Terraform
+#         terraform init -force-copy
+#         terraform plan
+#         terraform apply -auto-approve
+
+# - stage: SCMCheckout2
+#   displayName: Checkout Code
+#   dependsOn: TerraformOperations
+#   pool:
+#     #vmImage: ubuntu-latest
+#     name: "pool2" 
+#   jobs:
+#   - job: git_clone 
+#     displayName: Clone Git Repository
+#     steps:
+#     - checkout: self
+ 
+# - stage: MavenBuild_docker_compose
+#   displayName: Maven Build
+#   dependsOn: SCMCheckout2
+#   pool:
+#     #vmImage: ubuntu-latest
+#     name: "pool2" 
+#   jobs:
+#   - job: MavenBuildJob
+#     steps:
+#     - script: |
+#         echo "Running Maven build..."
+#         mvn clean install
+#         sudo docker compose up -d
+#         sudo docker ps 
+ 
+# - stage: Test_Docker  
+#   dependsOn: MavenBuild_docker_compose
+#   pool:
+#     #vmImage: ubuntu-latest
+#     name: "pool2" 
+#   jobs:
+#   - job: Test_Docker 
+#     displayName: Test_Docker
+#     steps:
+#     - script: | 
+#         curl localhost:8081
 
 - stage: SCMCheckout2
   displayName: Checkout Code
-  dependsOn: TerraformOperations
+  #dependsOn: TerraformOperations
   pool:
-    #vmImage: ubuntu-latest
-    name: "pool2" 
+    name: "pool2"
   jobs:
   - job: git_clone 
     displayName: Clone Git Repository
     steps:
     - checkout: self
+      clean: true
  
-- stage: MavenBuild_docker_compose
+- stage: MavenBuild
   displayName: Maven Build
   dependsOn: SCMCheckout2
-  pool:
-    #vmImage: ubuntu-latest
+  pool:  
     name: "pool2" 
   jobs:
   - job: MavenBuildJob
     steps:
-    - script: |
-        echo "Running Maven build..."
-        mvn clean install
-        sudo docker compose up -d
-        sudo docker ps 
+    - task: Maven@4
+      inputs:
+        azureSubscription: 'fullaccessportal'
+        mavenPomFile: 'pom.xml'
+        publishJUnitResults: false
+        javaHomeOption: 'JDKVersion'
+        mavenVersionOption: 'Default'
+        mavenAuthenticateFeed: false
+        effectivePomSkip: false
+        sonarQubeRunAnalysis: false
+        
+    - task: PublishBuildArtifacts@1
+      inputs:
+        PathtoPublish: '$(System.DefaultWorkingDirectory)/target/'
+        ArtifactName: 'target'
+        publishLocation: 'Container'
+ 
+- stage: DockerCompose
+  displayName: docker compose
+  dependsOn: MavenBuild
+  pool:
+    name: "pool2" 
+  jobs:
+  - job: DockerComposeUP
+    steps:
+    - task: DownloadBuildArtifacts@0
+      inputs:
+        buildType: 'current'
+        downloadType: 'single' 
+        artifactName: 'target'
+        downloadPath: '$(System.DefaultWorkingDirectory)/' 
+      
+    - task: DockerCompose@1
+      inputs:
+        containerregistrytype: 'Azure Container Registry'
+        azureSubscription: 'fullaccessportal'
+        dockerComposeFile: '$(System.DefaultWorkingDirectory)/docker-compose.yaml'
+        action: 'Run a Docker Compose command'
+        dockerComposeCommand: 'up -d'
  
 - stage: Test_Docker  
-  dependsOn: MavenBuild_docker_compose
+  dependsOn: DockerCompose
   pool:
-    #vmImage: ubuntu-latest
     name: "pool2" 
   jobs:
   - job: Test_Docker 
@@ -112,4 +183,3 @@ stages:
     steps:
     - script: | 
         curl localhost:8081
-
