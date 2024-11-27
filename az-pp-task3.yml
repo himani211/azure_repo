@@ -1,0 +1,149 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+ 
+trigger:
+  none
+ 
+pool:
+  name: "pool1"
+ 
+stages:
+# - stage: SCMCheckout
+#   displayName: Checkout Code
+#   jobs:
+#   - job: git_clone 
+#     displayName: Clone Git Repository
+#     steps:
+#     - checkout: self
+ 
+# - stage: InstallEpelAndAnsible
+#   displayName: Install EPEL-Release and Ansible
+#   dependsOn: SCMCheckout
+#   jobs:
+#   - job: Install_ansible
+#     steps:
+#     - script: |
+#         echo "Installing EPEL-Release and Ansible..."
+#         sudo dnf update -y
+#         sudo dnf install epel-release
+#         sudo dnf install ansible
+#         ansible --version
+ 
+#   - job: CaptureAndUpdate
+#     dependsOn: Install_ansible
+#     steps:
+#     - script: |
+#         echo "Capturing IP address..."
+#         ipAddress=$(ip a show eth0 | grep inet | grep -v inet6 | awk '{print $2}' | cut -d'/' -f1 | head -n 1)
+#         echo "IP Address: $ipAddress"
+        
+#         inventoryFile="/etc/ansible/hosts"
+#         if ! grep -q "$ipAddress" "$inventoryFile"; then
+#           echo "Adding IP address to inventory file..."
+#           echo "[Controller]" | sudo tee -a "$inventoryFile"
+#           echo "$ipAddress" | sudo tee -a "$inventoryFile"
+#         else
+#           echo "IP address $ipAddress already exists in the inventory file. Skipping update."
+#         fi
+        
+#         echo "Updated inventory file:"
+#         cat "$inventoryFile"
+ 
+# - stage: InstallTerraform
+#   displayName: Install Terraform using Ansible
+#   dependsOn: InstallEpelAndAnsible
+#   jobs:
+#   - job: InstallTerraform
+#     steps:
+#     - script: |
+#         echo "Running Ansible playbook to install Terraform..."
+#         ansible-playbook ./ansibleplaybooks/install_teraform.yaml
+ 
+# - stage: TerraformOperations
+#   displayName: Terraform Init, Plan, and Apply
+#   dependsOn: InstallTerraform
+#   jobs:
+#   - job: TerraformOps
+#     steps:
+#     - script: |
+#         echo "Initializing and applying Terraform configuration..."
+#         cd terraform
+#         terraform init -force-copy
+#         terraform plan
+#         terraform apply -auto-approve
+ 
+- stage: SCMCheckout2
+  displayName: Checkout Code
+  #dependsOn: TerraformOperations
+  pool:
+    name: "pool2"
+  jobs:
+  - job: git_clone 
+    displayName: Clone Git Repository
+    steps:
+    - checkout: self
+      clean: true
+ 
+- stage: MavenBuild
+  displayName: Maven Build
+  dependsOn: SCMCheckout2
+  pool:  
+    name: "pool2" 
+  jobs:
+  - job: MavenBuildJob
+    steps:
+    - task: Maven@4
+      inputs:
+        azureSubscription: 'full access portal'
+        mavenPomFile: 'pom.xml'
+        publishJUnitResults: false
+        javaHomeOption: 'JDKVersion'
+        mavenVersionOption: 'Default'
+        mavenAuthenticateFeed: false
+        effectivePomSkip: false
+        sonarQubeRunAnalysis: false
+        
+    - task: PublishBuildArtifacts@1
+      inputs:
+        PathtoPublish: '$(System.DefaultWorkingDirectory)/target'
+        ArtifactName: 'maven-artifact'
+        publishLocation: 'Container'
+ 
+- stage: DockerCompose
+  displayName: docker compose
+  dependsOn: MavenBuild
+  pool:
+    name: "pool2" 
+  jobs:
+  - job: DockerComposeUP
+    steps:
+    - task: DownloadBuildArtifacts@0
+      inputs:
+        buildType: 'current' # Downloads artifacts from the current build.
+        downloadType: 'single' # Downloads a single artifact.
+        artifactName: 'maven-artifact' # Name of the artifact to download.
+        downloadPath: '$(System.DefaultWorkingDirectory)/target' # Path where the artifact will be downloaded.
+    - script: |
+        echo "Starting Docker Compose..."
+        docker compose -f $(System.DefaultWorkingDirectory)/docker-compose.yaml up -d
+        # Capture the exit code of the Docker Compose command
+        if [ $? -ne 0 ]; then
+            echo "Docker Compose execution failed. Exiting with error."
+            exit 1
+        else
+            echo "Docker Compose executed successfully."
+            docker ps
+        fi
+- stage: Test_Docker  
+  dependsOn: DockerCompose
+  pool:
+    name: "pool2" 
+  jobs:
+  - job: Test_Docker 
+    displayName: Test_Docker
+    steps:
+    - script: | 
+        curl localhost:8081
+
