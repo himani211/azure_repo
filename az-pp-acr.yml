@@ -19,7 +19,7 @@ steps:
   displayName: 'Run a multi-line script'
 - task: Docker@2
   inputs:
-    containerRegistry: 'acr-cred'
+    containerRegistry: 'arc-cred'
     repository: 'pythonapp'
     command: 'buildAndPush'
     Dockerfile: '**/Dockerfile'
